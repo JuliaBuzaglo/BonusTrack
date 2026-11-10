@@ -113,10 +113,7 @@
   .foco { opacity: 0; fill: none; stroke: var(--lima); stroke-dasharray: 4 3; }
   .parada:focus-visible .foco { opacity: 1; }
 
-  /* En pantallas táctiles no hay "hover": mostramos los nombres siempre */
-  @media (hover: none) {
-    .etiqueta { opacity: 1; }
-  }
+  /* En pantallas táctiles el nombre aparece al tocar la parada, mientras Merenguita viaja */
 
   body.viajando .parada { cursor: progress; }
   .tranvia { pointer-events: none; }
