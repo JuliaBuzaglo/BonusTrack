@@ -57,6 +57,28 @@
   }
   @keyframes rayas { to { stroke-dashoffset: -36; } }
   @media (prefers-reduced-motion: reduce) { .rayas polyline { animation: none; } }
+  /* Celular vertical: el mapa ocupa más ancho que la pantalla y se recorre deslizando */
+  .pista { display: none; }
+  @media (orientation: portrait) and (max-aspect-ratio: 4/5) {
+    .escena { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain;
+      scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+    .escena::-webkit-scrollbar { display: none; }
+    .escena svg { width: 320vw; max-width: none; }
+    .escena canvas.textura { position: fixed; }
+    .pista {
+      display: block; position: fixed; left: 50%; z-index: 5;
+      bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+      transform: translateX(-50%);
+      font-family: "Grilla", ui-monospace, monospace; font-weight: 700; font-size: .85rem;
+      color: var(--violeta); background: var(--lima); padding: 8px 14px 10px;
+      box-shadow: 4px 4px 0 var(--naranja); white-space: nowrap; pointer-events: none;
+      animation: pista 1.6s steps(4) infinite;
+      transition: opacity .3s;
+    }
+    .pista.oculta { opacity: 0; }
+  }
+  @keyframes pista { 50% { transform: translateX(calc(-50% + 10px)); } }
+  @media (prefers-reduced-motion: reduce) { .pista { animation: none; } }
   canvas.textura { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
   .escena svg > image.fondo { pointer-events: none; }
 
@@ -91,10 +113,7 @@
   .foco { opacity: 0; fill: none; stroke: var(--lima); stroke-dasharray: 4 3; }
   .parada:focus-visible .foco { opacity: 1; }
 
-  /* En pantallas táctiles no hay "hover": mostramos los nombres siempre */
-  @media (hover: none) {
-    .etiqueta { opacity: 1; }
-  }
+  /* En pantallas táctiles el nombre aparece al tocar la parada, mientras Merenguita viaja */
 
   body.viajando .parada { cursor: progress; }
   .tranvia { pointer-events: none; }
@@ -242,7 +261,10 @@
     lienzo.className = "textura"; lienzo.setAttribute("aria-hidden", "true");
     capa.appendChild(lienzo);
     // mismo tamaño de grilla que la textura original del mapa (12,8 unidades)
-    textura(lienzo, { color: "#7A2EBF", espacio: (w, h) => Math.max(5, 12.8 * Math.min(w / E.ancho, h / E.alto)) });
+    textura(lienzo, { color: "#7A2EBF", espacio: () => {
+      const r = svg.getBoundingClientRect();
+      return Math.max(5, 12.8 * Math.min(r.width / E.ancho, r.height / E.alto));
+    } });
 
     // Merenguita
     const g = crear("g", { class: "tranvia", "aria-hidden": "true" });
@@ -310,6 +332,15 @@
     }
     capas.appendChild(capa);
     E.capa = capa;
+    const pista = document.createElement("div");
+    pista.className = "pista"; pista.setAttribute("aria-hidden", "true");
+    pista.textContent = "Deslizá para recorrer el mapa";
+    capa.appendChild(pista);
+    const ocultarPista = () => pista.classList.add("oculta");
+    ["touchmove", "wheel", "pointerdown"].forEach(ev => capa.addEventListener(ev, ocultarPista, { passive: true }));
+    setTimeout(ocultarPista, 6000);
+    requestAnimationFrame(() => seguir(E, E.pos[0], false));
+    window.addEventListener("resize", () => seguir(E, E.pos[0], false));
     if (E.agua) iniciarAgua(E, capa);
     reiniciarTranvia(E);
   }
@@ -423,6 +454,17 @@
     })(0);
   }
 
+  // ---------- En el celular, la vista acompaña a Merenguita ----------
+  function seguir(E, x, suave) {
+    const capa = E.capa;
+    if (!capa || capa.scrollWidth <= capa.clientWidth + 1) return;
+    const svg = capa.querySelector("svg");
+    const esc = Math.min(svg.clientWidth / E.ancho, svg.clientHeight / E.alto);
+    const margen = (svg.clientWidth - E.ancho * esc) / 2;
+    const destino = margen + x * esc - capa.clientWidth / 2;
+    capa.scrollLeft = suave ? capa.scrollLeft + (destino - capa.scrollLeft) * 0.12 : destino;
+  }
+
   function reiniciarTranvia(E) {
     E.en = E.arranque.en;
     E.pos = E.arranque.pos || E.punto(E.arranque.en);
@@ -456,6 +498,7 @@
     @media (prefers-reduced-motion: reduce) { .strip { animation: none; } }
     section.more > *:not(canvas) { position: relative; z-index: 1; }
     footer .display { cursor: pointer; }
+    footer small { background: #151513; box-shadow: 0 0 0 6px #151513; line-height: 1.5; }
     footer .display:hover .g { color: #fff; }
     .hand { cursor: pointer; transform-origin: 25% 15%; -webkit-tap-highlight-color: transparent; }
     .hand:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
@@ -698,6 +741,7 @@
         }
         const salto = t < 1 ? Math.abs(Math.sin(now / 70)) * E.ancho * 0.0018 : 0;
         ubicar(E, x, y, salto, vista);
+        seguir(E, x, true);
         if (t < 1) requestAnimationFrame(cuadro);
         else { E.pos = fin; res(); }
       }
